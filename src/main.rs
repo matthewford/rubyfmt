@@ -58,13 +58,9 @@ struct CommandlineOpts {
     #[clap(long, name = "include-gitignored")]
     include_gitignored: bool,
 
-    /// Only format ruby files containing the magic `# rubyfmt: true` header
+    /// Only format ruby files containing the magic `# rubyfmt: true` header `# rubyfmt: false` disables formatting.
     #[clap(long, name = "header-opt-in")]
     header_opt_in: bool,
-
-    /// Do not format ruby files containing the magic `# rubyfmt: false` header
-    #[clap(long, name = "header-opt-out")]
-    header_opt_out: bool,
 
     /// Fail on all syntax and io errors early. Warnings otherwise.
     #[clap(long, name = "fail-fast")]
@@ -126,7 +122,7 @@ fn handle_rubyfmt_error(err: rubyfmt::RichFormatError, source: &String, error_ex
 Rubyfmt failed to correctly deserialize a tree from ripper. This is a bug that needs to be reported.
 File a bug report at https://github.com/penelopezone/rubyfmt/issues/new.
 Ideally you would include the full source code of the program you ran rubyfmt with.
-If you can't do that for some reason, the best thing you can do is rerun rubyfmt on this program 
+If you can't do that for some reason, the best thing you can do is rerun rubyfmt on this program
 with the debug binary with `2>log_file` on the end and then send us the log file that gets generated.
 ";
             print_error(bug_report, Some(source));
@@ -181,36 +177,34 @@ fn rubyfmt_string(
     }: &CommandlineOpts,
     buffer: &str,
 ) -> Result<Option<String>, rubyfmt::RichFormatError> {
-    if header_opt_in || header_opt_out {
-        // Only look at the first 500 bytes for the magic header.
-        // This is for performance
-        let mut slice = buffer;
-        let mut slice_size = 500;
-        let blength = buffer.len();
+    // Only look at the first 500 bytes for the magic header.
+    // This is for performance
+    let mut slice = buffer;
+    let mut slice_size = 500;
+    let blength = buffer.len();
 
-        if blength > slice_size {
-            while !buffer.is_char_boundary(slice_size) && slice_size < blength {
-                slice_size += 1;
-            }
-            slice = &buffer[..slice_size]
+    if blength > slice_size {
+        while !buffer.is_char_boundary(slice_size) && slice_size < blength {
+            slice_size += 1;
         }
+        slice = &buffer[..slice_size]
+    }
 
-        let matched = MAGIC_COMMENT_REGEX
-            .captures(slice)
-            .and_then(|c| c.name("enabled"))
-            .map(|s| s.as_str());
+    let matched = MAGIC_COMMENT_REGEX
+        .captures(slice)
+        .and_then(|c| c.name("enabled"))
+        .map(|s| s.as_str());
 
-        // If opted in to magic "# rubyfmt: true" header and true is not
-        // in the file, return early
-        if header_opt_in && Some("true") != matched {
-            return Ok(None);
-        }
+    // If opted in to magic "# rubyfmt: true" header and true is not
+    // in the file, return early
+    if header_opt_in && Some("true") != matched {
+        return Ok(None);
+    }
 
-        // If opted in to magic "# rubyfmt: false" header and false is
-        // in the file, return early
-        if header_opt_out && Some("false") == matched {
-            return Ok(None);
-        }
+    // If opted in to magic "# rubyfmt: false" header and false is
+    // in the file, return early
+    if header_opt_out && Some("false") == matched {
+        return Ok(None);
     }
 
     rubyfmt::format_buffer(buffer).map(Some)
